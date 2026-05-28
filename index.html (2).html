@@ -704,12 +704,29 @@
     return sel ? sel.textContent : '초등학생';
   }
 
+  // ===== GEMINI API =====
+  const GEMINI_KEY = 'AIzaSyCeJoBwof3Ezd52-z51Ts7TDYDs0VrHYP4';
+  const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
+
+  async function callGemini(parts) {
+    const res = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts }] })
+    });
+    const data = await res.json();
+    const text = data.candidates[0].content.parts[0].text;
+    return text.replace(/```json|```/g, '').trim();
+  }
+
   // ===== PHOTO =====
   let photoBase64 = null;
+  let photoMimeType = 'image/jpeg';
 
   function handlePhoto(e) {
     const file = e.target.files[0];
     if (!file) return;
+    photoMimeType = file.type || 'image/jpeg';
     const reader = new FileReader();
     reader.onload = (ev) => {
       photoBase64 = ev.target.result.split(',')[1];
@@ -736,22 +753,12 @@
     document.getElementById('photo-result').classList.remove('visible');
 
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1500,
-          messages: [{
-            role: "user",
-            content: [
-              {
-                type: "image",
-                source: { type: "base64", media_type: "image/jpeg", data: photoBase64 }
-              },
-              {
-                type: "text",
-                text: `이 사진은 한국 ${grade} 학생의 영어 교과서 또는 학습지입니다.
+      const raw = await callGemini([
+        {
+          inline_data: { mime_type: photoMimeType, data: photoBase64 }
+        },
+        {
+          text: `이 사진은 한국 ${grade} 학생의 영어 교과서 또는 학습지입니다.
 사진 속 영어 문제나 내용을 파악하고, 아이 눈높이에 맞게 친절하게 도와주세요.
 
 반드시 JSON으로만 응답하세요 (마크다운 없이):
@@ -762,15 +769,9 @@
   ],
   "tip": "이 내용을 공부할 때 도움이 되는 한 가지 팁 (한국어, 친근하게)"
 }`
-              }
-            ]
-          }]
-        })
-      });
-      const data = await response.json();
-      const raw = data.content[0].text.replace(/```json|```/g, '').trim();
-      const result = JSON.parse(raw);
-      renderPhotoResult(result);
+        }
+      ]);
+      renderPhotoResult(JSON.parse(raw));
     } catch(e) {
       renderPhotoResult({
         summary: "교과서 영어 문제를 발견했어요!",
@@ -909,17 +910,7 @@ JSON만 응답 (마크다운 없이):
 }
 scores는 0-100 정수. detail은 한국어로 쉽게.`;
 
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          messages: [{ role: "user", content: prompt }]
-        })
-      });
-      const data = await response.json();
-      const raw = data.content[0].text.replace(/```json|```/g, '').trim();
+      const raw = await callGemini([{ text: prompt }]);
       renderSpeakResult(JSON.parse(raw));
     } catch(e) {
       renderSpeakResult({
@@ -1014,17 +1005,7 @@ JSON만 응답 (마크다운 없이):
 }
 score는 0-100. detail은 한국어로 쉽게. 문제가 없으면 good 위주로.`;
 
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          messages: [{ role: "user", content: prompt }]
-        })
-      });
-      const data = await response.json();
-      const raw = data.content[0].text.replace(/```json|```/g, '').trim();
+      const raw = await callGemini([{ text: prompt }]);
       renderWriteResult(JSON.parse(raw), essay);
     } catch(e) {
       renderWriteResult({
